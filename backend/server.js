@@ -3,9 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
-// const twilio = require('twilio'); // <-- REMOVED
-// const twilioClient = twilio(...); // <-- REMOVED
-
 // --- Import Models ---
 const Farmer = require('./models/Farmer');
 const Product = require('./models/Product');
@@ -23,15 +20,10 @@ const seedDatabase = async () => {
     try {
         const productCount = await Product.countDocuments();
         if (productCount > 0) {
-            console.log('Database already seeded. Skipping.');
             return;
         }
-        console.log('Seeding database with sample products...');
-        const sampleProducts = [
-            // ... (all your sample products) ...
-        ];
+        const sampleProducts = []; // (Add your sample products here if needed)
         await Product.insertMany(sampleProducts);
-        console.log('Database seeded successfully!');
     } catch (error) {
         console.error('Error seeding database:', error);
     }
@@ -61,27 +53,23 @@ const checkAdminAuth = (req, res, next) => {
 
 // --- API Endpoints ---
 
-// --- MODIFIED: /api/submit-form (SMS code removed) ---
+// [POST] /api/submit-form (Public)
 app.post('/api/submit-form', async (req, res) => {
     try {
         const newFarmer = new Farmer(req.body);
-        await newFarmer.save(); // Save to database
-
-        // --- SMS Logic Removed ---
+        await newFarmer.save(); 
         
-        // Send success response back to the frontend
+        // SMS Logic removed successfully
+
         res.status(201).json({ 
             message: 'Form submitted successfully!',
             phone: newFarmer.phone 
         });
-
     } catch (dbError) {
-        // This is for database errors
         console.error('Error saving data:', dbError);
         res.status(500).json({ message: 'Error submitting form' });
     }
 });
-
 
 // [GET] /api/products (Public)
 app.get('/api/products', async (req, res) => {
@@ -96,13 +84,9 @@ app.get('/api/products', async (req, res) => {
 // --- Admin Login Endpoint ---
 app.post('/api/admin/login', (req, res) => {
     const { password } = req.body;
-    
-    
     if (password && password === process.env.ADMIN_PASSWORD) {
-        console.log('Passwords matched!');
         res.status(200).json({ message: 'Login successful' });
     } else {
-        console.log('Passwords did NOT match.');
         res.status(401).json({ message: 'Invalid Password' });
     }
 });
@@ -203,10 +187,8 @@ app.put('/api/tips/like/:id', async (req, res) => {
         if (!tip) {
             return res.status(404).json({ message: 'Tip not found' });
         }
-        
         tip.likes += 1; 
         await tip.save();
-        
         res.status(200).json(tip);
     } catch (error) {
         res.status(500).json({ message: 'Error liking tip' });
@@ -220,27 +202,22 @@ app.post('/api/tips/comment/:id', async (req, res) => {
         if (!tip) {
             return res.status(404).json({ message: 'Tip not found' });
         }
-        
         const { name, comment } = req.body;
         if (!name || !comment) {
             return res.status(400).json({ message: 'Name and comment are required' });
         }
-
         const newComment = {
             name,
             comment,
             date: new Date()
         };
-
         tip.comments.push(newComment); 
         await tip.save();
-        
         res.status(201).json(tip);
     } catch (error) {
         res.status(500).json({ message: 'Error adding comment' });
     }
 });
-
 
 // [POST] /api/tips (Admin - SECURED)
 app.post('/api/tips', checkAdminAuth, async (req, res) => {
@@ -249,13 +226,11 @@ app.post('/api/tips', checkAdminAuth, async (req, res) => {
         if (!title || !content) {
             return res.status(400).json({ message: 'Title and content are required' });
         }
-
         const newTip = new Tip({
             title,
             content,
             imageUrl: imageUrl || ''
         });
-
         const savedTip = await newTip.save();
         res.status(201).json(savedTip);
     } catch (error) {
@@ -272,7 +247,6 @@ app.put('/api/tips/:id', checkAdminAuth, async (req, res) => {
             { title, content, imageUrl },
             { new: true, runValidators: true }
         );
-
         if (!updatedTip) {
             return res.status(404).json({ message: 'Tip not found' });
         }
@@ -287,11 +261,38 @@ app.delete('/api/tips/:id', checkAdminAuth, async (req, res) => {
     try {
         const deletedTip = await Tip.findByIdAndDelete(req.params.id);
         if (!deletedTip) {
-            return res.status(4404).json({ message: 'Tip not found' });
+            return res.status(404).json({ message: 'Tip not found' });
         }
         res.status(200).json({ message: 'Tip deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting tip' });
+    }
+});
+
+// --- NEW: Reply to Comment (Admin - SECURED) ---
+// (This was missing in your paste!)
+app.put('/api/tips/:tipId/comment/:commentId', checkAdminAuth, async (req, res) => {
+    try {
+        const { tipId, commentId } = req.params;
+        const { replyText } = req.body;
+
+        const tip = await Tip.findById(tipId);
+        if (!tip) {
+            return res.status(404).json({ message: 'Tip not found' });
+        }
+
+        const comment = tip.comments.id(commentId);
+        if (!comment) {
+            return res.status(404).json({ message: 'Comment not found' });
+        }
+
+        comment.adminReply = replyText;
+        
+        await tip.save(); 
+        res.status(200).json(tip); 
+    } catch (error) {
+        console.error('Error replying to comment:', error);
+        res.status(500).json({ message: 'Error replying to comment' });
     }
 });
 
